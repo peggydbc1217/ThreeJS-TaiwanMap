@@ -1,0 +1,20 @@
+{
+  "name": "threejs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "all.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "jsdom": "^24.1.0",
+    "three": "^0.165.0"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "vite": "^5.2.13"
+  }
+}

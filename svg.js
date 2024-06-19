@@ -6,11 +6,6 @@ import { FontLoader } from 'https://unpkg.com/three/examples/jsm/loaders/FontLoa
 import { loadSvgAndCreateMeshes } from './helper.js'
 
 
-
-
-
-
-
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -42,18 +37,21 @@ let targetRotation;
 let startRotation;
 let progressRotation = 0;
 
-// // 在camera, renderer宣後之後加上這行
-// const control = new OrbitControls(camera, renderer.domElement);
+// 在camera, renderer宣後之後加上這行
+const control = new OrbitControls(camera, renderer.domElement);
 
-// // Allow full vertical rotation
-// control.minPolarAngle = 0; // radians
-// control.maxPolarAngle = Math.PI; // radians
+// Limit vertical rotation
+// control.minPolarAngle = Math.PI / 6; // 30 degrees in radians
+// control.maxPolarAngle = Math.PI * 5 / 6; // 150 degrees in radians
 
-// // Allow panning (horizontal rotation)
-// control.enablePan = true;
+// Disable panning
+control.enablePan = false;
 
-// control.target.set(0, 0, 0)
-// control.update()
+// Set the target to the center of the scene
+control.target.set(0, 0, 0);
+
+// Required to make the changes take effect
+control.update();
 
 
 //  axesHelper, 顯示出xyz軸 
@@ -135,25 +133,20 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
     //     // console.log(svgData);
     // });
 
-    // const loadPathsFromTaipei = async () => await new SVGLoader().loadAsync('./resource/taipei.svg', svgData => {
-    //     // console.log(svgData);
-    // });;
 
-    // const loadPathsFromNewTaipei = async () => await new SVGLoader().loadAsync('./resource/newTaipei.svg', svgData => {
-    //     // console.log(svgData);
-    // });
+    let cities = ['Keelung', 'Taipei', 'NewTaipei', 'Taoyuan', 'Hsinchu_County', 'Hsinchu', 'Miaoli_County', 'Taichung', 'Changhua_County', 'Nantou_County', 'Yunlin_County', 'Chiayi_County', 'Chiayi', 'Tainan', 'Kaohsiung', 'Pingtung_County', 'Yilan_County', 'Hualien_County', 'Taitung_County', 'Penghu_County', 'Kinmen_County', 'Lienchiang_County']
+
 
     let allChildren = [];
 
     // Usage:
     (async () => {
-        const taipei = await loadSvgAndCreateMeshes('./resource/taipei.svg', isCountySelected, scene)
+        // const taipei = await loadSvgAndCreateMeshes('./Taiwan_referendum_16_map.svg', isCountySelected, scene)
 
-        const newTaipei = await loadSvgAndCreateMeshes('./resource/newTaipei.svg', isCountySelected, scene)
-
-
-        // Get all children from all group
-        allChildren = [...taipei.children, ...newTaipei.children]
+        for (let city of cities) {
+            let cityMeshes = await loadSvgAndCreateMeshes(`./resource/${city}.svg`, isCountySelected, scene);
+            allChildren.push(...cityMeshes.children);
+        }
     })();
 
     addAmbientLight()
@@ -278,20 +271,12 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
             if (selectedArea) {
                 return;
             }
-
             if (isCountySelected) {
-                // Reset the color of all objects in the group when the mouse is not hovering over the group    
-
-
                 // 選擇了縣市, 但是滑鼠移開了
-
-                // 新的物件與上一個物件相同
-                // Step 5: If the mouse is no longer intersecting, change the material back
                 if (INTERSECTED) INTERSECTED.material.color.setHex(INTERSECTED.currentHex);
                 tooltip.style.display = 'none';
                 INTERSECTED = null;
             }
-
         }
     }
 
@@ -311,13 +296,8 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
                 handleShowCity();
             } else {
                 //已經選擇縣市, 且hover到同一個縣市, show鄉鎮的顏色
-                selectedCity.traverse(area => {
-                    if (area !== intersects[0].object) {
-                        removeEdgesFromArea(area);
-                    } else {
-                        showArea(area);
-                    }
-                });
+                let intersectedObject = intersects[0].object;
+                handleShowArea(intersectedObject);
             }
         } else {
             //沒有選到任何縣市
@@ -330,7 +310,6 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
             resetCameraView();
         }
     }
-
 
 
     function animate() {
@@ -368,7 +347,7 @@ function handleShowCity() {
 
             // Create edges for the mesh
             const edgesGeometry = new THREE.EdgesGeometry(area.geometry);
-            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000});
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
 
             const lineSegments = new THREE.LineSegments(edgesGeometry, lineMaterial);
             lineSegments.raycast = function () { };
@@ -396,6 +375,18 @@ function handleShowCity() {
     setCameraViewTo(selectedCity);
 }
 
+function handleShowArea(intersectedObject) {
+    //已經選擇縣市, 且hover到同一個縣市, show鄉鎮的顏色
+    selectedCity.traverse(area => {
+        if (area !== intersectedObject) {
+            removeEdgesFromArea(area);
+        } else {
+            selectedArea = area;
+            showArea(area);
+        }
+    });
+}
+
 
 function resetCameraView() {
     progress = 0;
@@ -420,7 +411,6 @@ function removeEdgesFromArea(area) {
 }
 
 function showArea(area) {
-    selectedArea = area;
     area.material.color.setHex(0xffff00);
     area.userData.edges.material.color.setHex(0x000000);
 
@@ -473,12 +463,12 @@ function setCameraViewTo(target) {
     let size = new THREE.Vector3();
     box.getSize(size);
 
-    let tiltAngle = Math.PI / 8; // 30 degrees tilt
+    let tiltAngle = Math.PI / 180; // 30 degrees tilt
 
     // Calculate the diagonal of the bounding box
     let diagonal = new THREE.Vector3().subVectors(box.max, box.min).length();
 
-    let distance = diagonal / (2 * Math.tan((camera.fov / 2) * (Math.PI / 180))) * (1 / 0.9);
+    let distance = diagonal / (2 * Math.tan((camera.fov / 2) * (Math.PI / 180))) * (1 / 0.8);
 
     // Adjust the camera position to account for the tilt
     let zAdjustment = distance * Math.cos(tiltAngle);

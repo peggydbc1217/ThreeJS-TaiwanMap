@@ -17,8 +17,6 @@ camera.position.set(1100, 0, 1500)
 const helper = new THREE.CameraHelper(camera);
 scene.add(helper);
 
-
-
 //定義全域變數, 用來存放hover, click時的操作
 // Get a reference to the tooltip element
 const tooltip = document.getElementById('tooltip');
@@ -37,60 +35,25 @@ let targetRotation;
 let startRotation;
 let progressRotation = 0;
 
-// 在camera, renderer宣後之後加上這行
-const control = new OrbitControls(camera, renderer.domElement);
+//oigin
+let svgCenterLatLng = [24.005198, 120.652659]
+let svgCenterThree = [720.0, -828.20]
 
-// Limit vertical rotation
-// control.minPolarAngle = Math.PI / 6; // 30 degrees in radians
-// control.maxPolarAngle = Math.PI * 5 / 6; // 150 degrees in radians
+//distance:5.237 km
 
-// Disable panning
-control.enablePan = false;
+//草屯虎山國小 new location
+let newloactionLatLng = [23.9641328, 120.6778911]
+// let newLocationThree = [737.30, -853.20]
 
-// Set the target to the center of the scene
-control.target.set(0, 0, 0);
+let cities = ['Keelung', 'Taipei', 'NewTaipei', 'Taoyuan', 'Hsinchu_County', 'Hsinchu', 'Miaoli_County', 'Taichung', 'Changhua_County', 'Nantou_County', 'Yunlin_County', 'Chiayi_County', 'Chiayi', 'Tainan', 'Kaohsiung', 'Pingtung_County', 'Yilan_County', 'Hualien_County', 'Taitung_County', 'Penghu_County', 'Kinmen_County', 'Lienchiang_County']
 
-// Required to make the changes take effect
-control.update();
+//用來定義hover物件
+let allChildren = [];
 
 
-//  axesHelper, 顯示出xyz軸 
-const dir = new THREE.Vector3(1, 2, 0);
-dir.normalize();
-const origin = new THREE.Vector3(0, 0, 0);
-const length = 50;
-const axesHelper = new THREE.ArrowHelper(dir, origin, length);
-scene.add(axesHelper);
 
-// 新增環境光
-const addAmbientLight = () => {
-    const light = new THREE.AmbientLight(0xffffff, 1)
-    scene.add(light)
-}
 
-// 新增平行光
-const addDirectionalLight = () => {
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-    directionalLight.position.set(0, 0, 20)
-    scene.add(directionalLight);
-    directionalLight.castShadow = true
-    const d = 10;
-
-    directionalLight.shadow.camera.left = - d;
-    directionalLight.shadow.camera.right = d;
-    directionalLight.shadow.camera.top = d;
-    directionalLight.shadow.camera.bottom = - d;
-
-    // 新增Helper
-    const lightHelper = new THREE.DirectionalLightHelper(directionalLight, 0, 0xffff00)
-    scene.add(lightHelper);
-    // 更新位置
-    directionalLight.target.position.set(0, 0, 0);
-    directionalLight.target.updateMatrixWorld();
-    // 更新Helper
-    lightHelper.update();
-}
-
+runThreeHelper()
 let isCountySelected = false;
 
 const loader = new FontLoader();
@@ -134,11 +97,6 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
     // });
 
 
-    let cities = ['Keelung', 'Taipei', 'NewTaipei', 'Taoyuan', 'Hsinchu_County', 'Hsinchu', 'Miaoli_County', 'Taichung', 'Changhua_County', 'Nantou_County', 'Yunlin_County', 'Chiayi_County', 'Chiayi', 'Tainan', 'Kaohsiung', 'Pingtung_County', 'Yilan_County', 'Hualien_County', 'Taitung_County', 'Penghu_County', 'Kinmen_County', 'Lienchiang_County']
-
-
-    let allChildren = [];
-
     // Usage:
     (async () => {
         // const taipei = await loadSvgAndCreateMeshes('./Taiwan_referendum_16_map.svg', isCountySelected, scene)
@@ -147,10 +105,22 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
             let cityMeshes = await loadSvgAndCreateMeshes(`./resource/${city}.svg`, isCountySelected, scene);
             allChildren.push(...cityMeshes.children);
         }
+
+        // 放出helper axis 
+        // Create a bounding box
+        let boundingBox = new THREE.Box3();
+        // For each mesh in allChildren, expand the bounding box to include the mesh
+        for (let child of allChildren) {
+            boundingBox.expandByObject(child);
+        }
+        // The center of the bounding box is the center of the SVG files
+        let svgCenter = boundingBox.getCenter(new THREE.Vector3());
+        addHelperAxis(svgCenter)
+
     })();
 
-    addAmbientLight()
-    addDirectionalLight()
+
+
 
 
     // Step 1: Create a Raycaster and a Vector2
@@ -172,6 +142,7 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
     let text = addText('')
 
     let INTERSECTED;
+
 
     function hover() {
         // updates the raycaster to start from the camera and pass through the mouse's current position in normalized device coordinates.
@@ -228,8 +199,12 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
             } else {
                 // 已經onclick了某個城市
 
-                //如果有onclick某個鄉鎮, 就不要有任何hover動作
+                //如果有onclick某個鄉鎮, 就只能hover案場
                 if (selectedArea) {
+                    if (intersectedObject.geometry instanceof THREE.ShapeGeometry) {
+                        // Perform the hover action
+                        console.log(intersectedObject.userData.siteName);
+                    }
                     return;
                 }
 
@@ -307,9 +282,14 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
             selectedCityColor = null;
             selectedArea = null;
             tooltip.style.display = 'none';
-            resetCameraView();
+            // resetCameraView();
         }
     }
+
+
+    createTraingle(latLngToCustom(25.025343, 121.56855), '吳興國小')
+    createTraingle(latLngToCustom(25.047153, 121.569694), '興雅國小')
+    createTraingle(latLngToCustom(25.038480, 121.586201), '福德國小')
 
 
     function animate() {
@@ -329,6 +309,10 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
             camera.rotation.x = startRotation.x + (targetRotation.x - startRotation.x) * progressRotation;
         }
 
+        // control.update();
+
+
+
         renderer.render(scene, camera);
     }
 
@@ -337,7 +321,7 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
 })
 
 
-/////////////Helper/////////////////////////////////////////
+//////////////////////////////////////Helper/////////////////////////////////////////
 function handleShowCity() {
     hoverIntersectedGroup.traverse((area) => {
         if (area instanceof THREE.Mesh) {
@@ -427,7 +411,6 @@ function showArea(area) {
     area.geometry.dispose(); // Dispose of the old geometry
     area.geometry = newGeometry; // Assign the new geometry
 
-
     setCameraViewTo(area);
 }
 
@@ -463,7 +446,7 @@ function setCameraViewTo(target) {
     let size = new THREE.Vector3();
     box.getSize(size);
 
-    let tiltAngle = Math.PI / 180; // 30 degrees tilt
+    let tiltAngle = Math.PI / 60; // 30 degrees tilt
 
     // Calculate the diagonal of the bounding box
     let diagonal = new THREE.Vector3().subVectors(box.max, box.min).length();
@@ -487,4 +470,158 @@ function setCameraViewTo(target) {
     progressRotation = 0;
     targetRotation = new THREE.Euler(tiltAngle, 0, 0, 'XYZ'); // 30 degrees tilt
     startRotation = camera.rotation.clone();
+}
+
+
+function runThreeHelper() {
+
+    // // 在camera, renderer宣後之後加上這行
+    // const control = new OrbitControls(camera, renderer.domElement);
+
+    // document.getElementById('resetButton').addEventListener('click', function () {
+    //     resetCameraView();
+    //     control.target.set(0, 0, 0);
+    //     control.update();
+
+    // });
+
+    // // control.enablePan = false;
+
+    // // control.enableKeys = true;
+    // // control.keys = {
+    // //     LEFT: THREE.MOUSE.PAN,
+    // //     // UP: 38, // up arrow
+    // //     // RIGHT: 39, // right arrow
+    // //     // BOTTOM: 40 // down arrow
+    // // }
+
+    // control.listenToKeyEvents(window);
+    // // Set the target to the center of the scene
+    // control.target.set(0, 0, 0);
+
+    // // Required to make the changes take effect
+    // control.update();
+
+    // 新增環境光
+    const addAmbientLight = () => {
+        const light = new THREE.AmbientLight(0xffffff, 1)
+        scene.add(light)
+    }
+
+    // 新增平行光
+    const addDirectionalLight = () => {
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
+        directionalLight.position.set(0, 0, 20)
+        scene.add(directionalLight);
+        directionalLight.castShadow = true
+        const d = 10;
+
+        directionalLight.shadow.camera.left = - d;
+        directionalLight.shadow.camera.right = d;
+        directionalLight.shadow.camera.top = d;
+        directionalLight.shadow.camera.bottom = - d;
+
+        // 新增Helper
+        const lightHelper = new THREE.DirectionalLightHelper(directionalLight, 0, 0xffff00)
+        scene.add(lightHelper);
+        // 更新位置
+        directionalLight.target.position.set(0, 0, 0);
+        directionalLight.target.updateMatrixWorld();
+        // 更新Helper
+        lightHelper.update();
+    }
+
+    addAmbientLight()
+    addDirectionalLight()
+}
+
+function addHelperAxis(svgCenter) {
+    //  axesHelper, 顯示出xyz軸 
+    const xDir = new THREE.Vector3(1, 0, 0);
+    const yDir = new THREE.Vector3(0, 1, 0);
+    const zDir = new THREE.Vector3(0, 0, 1);
+    xDir.normalize();
+    yDir.normalize();
+    zDir.normalize();
+    // const origin = new THREE.Vector3(0, 0, 0);
+    const origin = svgCenter;
+    const length = 500;
+    const axesHelperX = new THREE.ArrowHelper(xDir, origin, length, 0xffff00);
+    const axesHelperY = new THREE.ArrowHelper(yDir, origin, length, 0xffffff);
+    const axesHelperZ = new THREE.ArrowHelper(zDir, origin, length, 0x00ffff);
+
+    scene.add(axesHelperX);
+    scene.add(axesHelperY);
+    scene.add(axesHelperZ);
+}
+
+
+
+// Convert a latitude/longitude point to your custom coordinate system
+function latLngToCustom(newLat, newLon) {
+    //svg的中心點
+    let lat1 = 24.005198;
+    let lon1 = 120.652659;
+    let x1 = 720.0;
+    let y1 = -828.20;
+
+    //隨便用map找一個地方
+    let lat2 = 24.312676;
+    let lon2 = 121.770973;
+    let x2 = 1315;
+    let y2 = -650;
+
+    // Calculate the scale factors
+    let xScale = (x2 - x1) / (lon2 - lon1);
+    let yScale = (y2 - y1) / (lat2 - lat1);
+
+    // Calculate the offsets
+    let xOffset = x1 - lon1 * xScale;
+    let yOffset = y1 - lat1 * yScale;
+
+    // Convert the new latitude/longitude to the custom coordinate system
+    let newX = newLon * xScale + xOffset;
+    let newY = newLat * yScale + yOffset;
+
+    return new THREE.Vector3(newX - 1, newY, 10);
+}
+
+function createTraingle(vector3, siteName) {
+    // Create a new shape
+    let shape = new THREE.Shape();
+
+    // Move to the first point of the triangle
+    shape.moveTo(0, 0);
+
+    // Draw lines to the other two points
+    shape.lineTo(1.5, 0);
+    shape.lineTo(0, 1.5);
+
+    // Close the shape
+    shape.closePath();
+
+    // Create a geometry from the shape
+    let geometry = new THREE.ShapeGeometry(shape);
+
+    // Create a material
+    let material = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
+
+    // Create a mesh from the geometry and material
+    let triangle = new THREE.Mesh(geometry, material);
+
+    //儲存名稱
+    triangle.userData.siteName = siteName;
+
+    // Set the position of the triangle
+    triangle.position.set(vector3.x, vector3.y, vector3.z);
+
+    // Set the rotation of the triangle
+    let rotation = new THREE.Vector3(0, 0, Math.PI / 4);
+    triangle.rotation.set(rotation.x, rotation.y, rotation.z);
+
+    allChildren.push(triangle);
+
+    // Add the triangle to the scene
+    scene.add(triangle);
+
 }

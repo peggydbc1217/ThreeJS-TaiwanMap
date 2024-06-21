@@ -243,9 +243,10 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
                 resetCityEffect();
                 handleClickCity(intersectedObject);
             } else {
+
                 //已經選擇城市, 且選擇到同一個城市內的鄉鎮, show鄉鎮的顏色
                 if(intersectedObject.parent === selectedCity){
-                    console.log('click area');       
+                    console.log('click area');
                     handleClickArea(intersectedObject);
                 } else{
                     resetCityEffect();
@@ -275,7 +276,7 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
         stats.begin()
         requestAnimationFrame(animate);
 
-        hover();
+        // hover();
         // text.lookAt(...camera.position.toArray())
         // console.log(`Camera position: x = ${camera.position.x.toFixed(2)}, y = ${camera.position.y.toFixed(2)}, z = ${camera.position.z.toFixed(2)}`);
 
@@ -329,7 +330,6 @@ function handleClickCity(intersectedObject) {
         if (area instanceof THREE.Mesh) {
             // Set the color of the area
             area.currentHex = area.material.color.getHex();
-            area.material.color.setHex(0xff0000);
 
             // Create edges for the mesh
             // const edgesGeometry = new THREE.EdgesGeometry(area.geometry);
@@ -376,21 +376,20 @@ function handleClickArea(intersectedObj) {
             return;
         }
 
-        if ( area === intersectedObj) {
+        if ( area.userData.areaName === intersectedObj.userData.areaName) {
             showArea(area);
         }
     });
 }
 
 function showArea(area) {
-    console.log('selected area = ', area.userData.areaName);
+    console.log('selected area =', area.userData.areaName);
 
     selectedArea = area;
     selectedAreaColor = area.currentHex;
-
     area.material.color.setHex(0xffff00);
 
-
+    console.log(selectedCity);
 
     //讓選擇的城市看起來更立體
     let shape = area.geometry.parameters.shapes;
@@ -400,6 +399,7 @@ function showArea(area) {
         bevelThickness: 0.5,
         ...area.geometry.parameters.options
     };
+
     let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     // Replace the old geometry
     area.geometry.dispose(); // Dispose of the old geometry
@@ -415,10 +415,10 @@ function resetCityEffect() {
         selectedCity.traverse((area) => {
             if (area instanceof THREE.Mesh) {
                 // Reset the color
-                area.material.color.setHex(selectedCityColor);
+                area.material.color.setHex(area.currentHex);
 
                 //remove the edges 
-                area.remove(area.userData.edges);
+                // area.remove(area.userData.edges);
 
                 //城市的立體感拿掉
                 let shape = area.geometry.parameters.shapes;

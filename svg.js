@@ -174,11 +174,11 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
         if (intersects.length > 0) {
             const intersectedObject = intersects[0].object;
 
-
             if (isCountySelected) {
 
                 if (selectedArea) {
-                    //hover同縣市的鄉鎮
+
+                    //hover同城市的鄉鎮
                     if (intersectedObject.parent === selectedCity) {
 
                         //hover的鄉鎮是已經選擇的鄉鎮
@@ -188,7 +188,6 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
                         } else {
                             //上一個hover的鄉鎮是已經選擇的鄉鎮
                             if (hoveredArea === selectedArea) {
-                                //到不了這裡
                                 handleHoverArea(intersectedObject)
                             } else {
                                 resetHoverEffect(selectedArea);
@@ -207,7 +206,7 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
 
                     }
                 } else {
-                    //hover同縣市的鄉鎮
+                    //hover同城市的鄉鎮
                     if (intersectedObject.parent === selectedCity) {
                         resetHoverEffect();
                         handleHoverArea(intersectedObject)
@@ -224,38 +223,8 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
             }
         } else {
             //滑鼠在空白處
-            resetHoverEffect();
+            resetHoverEffect(selectedArea);
         }
-
-
-
-        // if (!selectedArea) {
-        //     resetHoverEffect(intersectedObject);
-        // }
-
-        // updateHoverUnit(intersectedObject);
-
-        // // hover到案場
-        // if (intersectedObject.geometry instanceof THREE.ShapeGeometry) {
-        //     handleHoverSite(intersectedObject);
-        // }
-
-        // // 有選擇的鄉鎮, hover到那個鄉鎮
-        // else if (selectedArea === intersectedObject) {
-        //     return;
-        // }
-
-        // // 有選擇的縣市, hover到那個縣市
-        // else if (isCountySelected && hoverIntersectedGroup === selectedCity) {
-        //     handleHoverArea(intersectedObject);
-        // }
-
-        // // 有選擇的縣市, hover到另一個縣市
-        // else {
-        //     handleHoverCity();
-        //     tooltip.style.display = 'none';
-        // }
-
     }
 
 
@@ -266,17 +235,25 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
         const intersects = raycaster.intersectObjects(allChildren, true);
 
         if (intersects.length > 0) {
-            //如果還沒選擇縣市, 或是已經選縣市了但是又選不同的縣市, show縣市的顏色
-            if (!isCountySelected || hoverIntersectedGroup !== selectedCity) {
+
+            const intersectedObject = intersects[0].object;
+
+            //如果還沒選擇城市, 或是已經選城市了但是又選不同的城市, show城市的特效
+            if (!isCountySelected || intersectedObject.parent !== selectedCity) {
                 resetCityEffect();
-                handleClickCity();
+                handleClickCity(intersectedObject);
             } else {
-                //已經選擇縣市, 且選擇到同一個縣市內的鄉鎮, show鄉鎮的顏色
-                let intersectedArea = intersects[0].object;
-                handleClickArea(intersectedArea);
+                //已經選擇城市, 且選擇到同一個城市內的鄉鎮, show鄉鎮的顏色
+                if(intersectedObject.parent === selectedCity){
+                    console.log('click area');       
+                    handleClickArea(intersectedObject);
+                } else{
+                    resetCityEffect();
+                    handleClickCity(intersectedObject);
+                }
             }
         } else {
-            //沒有選到任何縣市
+            //沒有選到任何城市
             resetCityEffect();
             isCountySelected = false;
             selectedCity = null;
@@ -335,12 +312,24 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
 
 
 //////////////////////////////////////Helper/////////////////////////////////////////
-function handleClickCity() {
-    hoverIntersectedGroup.traverse((area) => {
+function handleClickCity(intersectedObject) {
+
+    selectedCity = null;
+    selectedCityColor = null;
+    selectedArea = null;
+
+    allChildren.forEach(area => {
+        if (area === intersectedObject) {
+            selectedCity = area.parent;
+            selectedCityColor = area.currentHex;
+        }
+    });
+
+    selectedCity.traverse((area) => {
         if (area instanceof THREE.Mesh) {
             // Set the color of the area
-            let color = hoverIntersectedGroupColor ? hoverIntersectedGroupColor : 0xffffff;
-            area.material.color.setHex(color);
+            area.currentHex = area.material.color.getHex();
+            area.material.color.setHex(0xff0000);
 
             // Create edges for the mesh
             // const edgesGeometry = new THREE.EdgesGeometry(area.geometry);
@@ -366,29 +355,90 @@ function handleClickCity() {
         }
     });
 
-    selectedArea = null;
-    selectedCity = hoverIntersectedGroup;
-    selectedCityColor = hoverIntersectedGroupColor;
     isCountySelected = true;
     setCameraViewTo(selectedCity);
 }
 
-function handleClickArea(intersectedArea) {
-    selectedArea = null;
+function handleClickArea(intersectedObj) {
 
-    //已經選擇縣市, 且選同個縣市內的鄉鎮, show鄉鎮的顏色
+    //reset上個選擇的鄉鎮的顏色
+    if(selectedArea){
+        console.log('last selected area = ', selectedArea.userData.areaName);
+        selectedArea.material.color.setHex(selectedAreaColor);
+    }
+
+
+
+    //已經選擇城市, 且選同個城市內的鄉鎮, show鄉鎮的顏色
     selectedCity.traverse((area) => {
-
         //three group的第一個元素是他自己, 所以要過濾掉
         if (area instanceof THREE.Group) {
             return;
         }
 
-        if (area.userData.areaName === intersectedArea.userData.areaName) {
-            selectedArea = area;
+        if ( area === intersectedObj) {
             showArea(area);
         }
     });
+}
+
+function showArea(area) {
+    console.log('selected area = ', area.userData.areaName);
+
+    selectedArea = area;
+    selectedAreaColor = area.currentHex;
+
+    area.material.color.setHex(0xffff00);
+
+
+
+    //讓選擇的城市看起來更立體
+    let shape = area.geometry.parameters.shapes;
+    let extrudeSettings = {
+        depth: -10, // updated depth of the extrusion
+        bevelEnabled: true,
+        bevelThickness: 0.5,
+        ...area.geometry.parameters.options
+    };
+    let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    // Replace the old geometry
+    area.geometry.dispose(); // Dispose of the old geometry
+    area.geometry = newGeometry; // Assign the new geometry
+    setCameraViewTo(area);
+}   
+
+
+function resetCityEffect() {
+
+    if (selectedCity) {
+        //把上一個selectedCity裡面所有的鄉鎮特效清除
+        selectedCity.traverse((area) => {
+            if (area instanceof THREE.Mesh) {
+                // Reset the color
+                area.material.color.setHex(selectedCityColor);
+
+                //remove the edges 
+                area.remove(area.userData.edges);
+
+                //城市的立體感拿掉
+                let shape = area.geometry.parameters.shapes;
+                let extrudeSettings = {
+                    // depth: 0, // updated depth of the extrusion
+                    // ...area.geometry.parameters.options
+                };
+                let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+                // Replace the old geometry
+                area.geometry.dispose(); // Dispose of the old geometry
+                area.geometry = newGeometry; // Assign the new 
+            }
+        }
+        );
+    }
+
+    if(selectedArea){
+        selectedArea.material.color.setHex(selectedAreaColor);
+    }
 }
 
 
@@ -425,11 +475,12 @@ function resetHoverEffect(selectedArea) {
     }
 
     //某個鄉鎮改回原本的顏色    
-    if (hoveredArea) {
+    if (hoveredArea && hoveredArea !== selectedArea) {
         hoveredArea.material.color.setHex(hoveredArea.currentHex);
         hoveredArea = null;
     }
 }
+
 
 
 function handleHoverSite(intersectedObject) {
@@ -465,24 +516,6 @@ function removeEdgesFromArea(area) {
     area.remove(area.userData.edges);
 }
 
-function showArea(area) {
-    area.material.color.setHex(0xffff00);
-    area.currentHex = 0xffff00;
-
-    //讓選擇的城市看起來更立體
-    let shape = area.geometry.parameters.shapes;
-    let extrudeSettings = {
-        depth: -10, // updated depth of the extrusion
-        bevelEnabled: true,
-        bevelThickness: 0.5,
-        ...area.geometry.parameters.options
-    };
-    let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    // Replace the old geometry
-    area.geometry.dispose(); // Dispose of the old geometry
-    area.geometry = newGeometry; // Assign the new geometry
-    setCameraViewTo(area);
-}
 
 function handleHoverArea(intersectedObject) {
 
@@ -502,33 +535,6 @@ function handleHoverArea(intersectedObject) {
     // control.update()
 }
 
-function resetCityEffect() {
-    if (selectedCity) {
-        //把上一個selectedCity裡面所有的物件顏色改回原本的顏色
-        selectedCity.traverse((area) => {
-            if (area instanceof THREE.Mesh) {
-                // Reset the color
-                area.material.color.setHex(selectedCityColor);
-
-                //remove the edges 
-                area.remove(area.userData.edges);
-
-                //城市的立體感拿掉
-                let shape = area.geometry.parameters.shapes;
-                let extrudeSettings = {
-                    // depth: 0, // updated depth of the extrusion
-                    // ...area.geometry.parameters.options
-                };
-                let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-
-                // Replace the old geometry
-                area.geometry.dispose(); // Dispose of the old geometry
-                area.geometry = newGeometry; // Assign the new 
-            }
-        }
-        );
-    }
-}
 
 
 

@@ -4,7 +4,16 @@ import { SVGLoader } from 'https://unpkg.com/three@latest/examples/jsm/loaders/S
 import { TextGeometry } from 'https://unpkg.com/three/examples/jsm/geometries/TextGeometry.js';
 import { FontLoader } from 'https://unpkg.com/three/examples/jsm/loaders/FontLoader.js';
 import { loadSvgAndCreateMeshes } from './helper.js'
+import Stats from 'stats.js'
+import schoolData from './schools.js';
 
+//fps
+const stats = new Stats()
+stats.showPanel(0) // 0: fps, 1: ms, 2: mb, 3+: custom
+document.body.appendChild(stats.dom)
+
+//svg來源
+//https://commons.wikimedia.org/wiki/File:Taiwan_referendum_16_map.svg
 
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -12,10 +21,11 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000)
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
-camera.position.set(1100, 0, 1500)
+const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 1, 10000);
+camera.position.set(1100, -1000, 1500)
 const helper = new THREE.CameraHelper(camera);
 scene.add(helper);
+
 
 //定義全域變數, 用來存放hover, click時的操作
 // Get a reference to the tooltip element
@@ -24,8 +34,12 @@ let hoverIntersectedGroup;
 let hoverIntersectedGroupColor;
 let selectedCity;
 let selectedCityColor;
+let hoveredArea;
 let selectedArea;
-let selectedAreaColor;
+let selectedAreaColor = '0xffff00';
+
+//tool
+let mouse = new THREE.Vector2();
 
 //lerp, used to animate the camera
 let targetPosition;
@@ -101,21 +115,28 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
     (async () => {
         // const taipei = await loadSvgAndCreateMeshes('./Taiwan_referendum_16_map.svg', isCountySelected, scene)
 
-        for (let city of cities) {
-            let cityMeshes = await loadSvgAndCreateMeshes(`./resource/${city}.svg`, isCountySelected, scene);
+        // Create an array of promises
+        let promises = cities.map(city => loadSvgAndCreateMeshes(`./resource/${city}.svg`, isCountySelected, scene));
+
+        // Wait for all promises to resolve
+        let cityMeshesArray = await Promise.all(promises);
+
+
+        // Add all the meshes to allChildren
+        for (let cityMeshes of cityMeshesArray) {
             allChildren.push(...cityMeshes.children);
         }
 
-        // 放出helper axis 
-        // Create a bounding box
-        let boundingBox = new THREE.Box3();
-        // For each mesh in allChildren, expand the bounding box to include the mesh
-        for (let child of allChildren) {
-            boundingBox.expandByObject(child);
-        }
-        // The center of the bounding box is the center of the SVG files
-        let svgCenter = boundingBox.getCenter(new THREE.Vector3());
-        addHelperAxis(svgCenter)
+        // // 放出helper axis 
+        // // Create a bounding box
+        // let boundingBox = new THREE.Box3();
+        // // For each mesh in allChildren, expand the bounding box to include the mesh
+        // for (let child of allChildren) {
+        //     boundingBox.expandByObject(child);
+        // }
+        // // The center of the bounding box is the center of the SVG files
+        // let svgCenter = boundingBox.getCenter(new THREE.Vector3());
+        // addHelperAxis(svgCenter)
 
     })();
 
@@ -141,118 +162,100 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
     // 初始化物件
     let text = addText('')
 
-    let INTERSECTED;
-
+    //有選擇的鄉鎮, hover道別的鄉鎮--> 移開後不會刪除顏色
 
     function hover() {
-        // updates the raycaster to start from the camera and pass through the mouse's current position in normalized device coordinates.
+
         raycaster.setFromCamera(mouse, camera);
-
-        // calculate objects intersecting the picking ray
-        // This line calculates the objects that intersect with the ray. It returns an array of all the objects in group. children that the ray intersects with.
-        // The true argument means that the function will check all descendants of the group, not just direct children. The returned array is sorted by distance, with the closest intersection first.
-        // Each item in the array is an object that includes the intersected object and additional details about the intersection.
-
         //第一個參數要接收an array of objects, 不能放group而已
         const intersects = raycaster.intersectObjects(allChildren, true);
-
-        // intersects是一個陣列，裡面包含了所有與raycaster相交的物件。
-        // intersects[0].object 就是與raycaster相交的第一個物件。
-
-        //     intersects[0] = {
-        //     distance: 35.5,
-        //     point: new THREE.Vector3(10, 20, 30),
-        //     face: new THREE.Face3(0, 1, 2),
-        //     object: new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({color: 0x00ff00}))
-        // }
-
-
-        //把上一個hoverIntersectedGroup裡面所有的物件顏色改回原本的顏色
-        if (hoverIntersectedGroup) {
-            hoverIntersectedGroup.traverse((area) => {
-                if (area instanceof THREE.Mesh && !selectedArea) {
-                    area.material.color.setHex(hoverIntersectedGroupColor);
-                }
-            });
-            hoverIntersectedGroup = null;
-        }
-
 
         // If there's an intersection
         if (intersects.length > 0) {
             const intersectedObject = intersects[0].object;
 
-            //更新新的hoverIntersectedGroup
-            allChildren.forEach(area => {
-                if (area === intersectedObject) {
-                    hoverIntersectedGroup = area.parent;
-                    //紀錄當前hoverIntersectedGroup的顏色, 用在滑鼠移開時改回原本的顏色
-                    hoverIntersectedGroupColor = hoverIntersectedGroup.children[0].material.color.getHex();
+
+            if (isCountySelected) {
+
+                if (selectedArea) {
+                    //hover同縣市的鄉鎮
+                    if (intersectedObject.parent === selectedCity) {
+
+                        //hover的鄉鎮是已經選擇的鄉鎮
+                        if (intersectedObject === selectedArea) {
+                            resetHoverEffect(selectedArea);
+                            return;
+                        } else {
+                            //上一個hover的鄉鎮是已經選擇的鄉鎮
+                            if (hoveredArea === selectedArea) {
+                                //到不了這裡
+                                handleHoverArea(intersectedObject)
+                            } else {
+                                resetHoverEffect(selectedArea);
+                                handleHoverArea(intersectedObject);
+                            }
+                        }
+
+                    } else {
+                        //上一個hover的元素是已經選擇的鄉鎮
+                        if (hoveredArea === selectedArea) {
+                            handleHoverCity(intersectedObject);
+                        } else {
+                            resetHoverEffect(selectedArea);
+                            handleHoverCity(intersectedObject);
+                        }
+
+                    }
+                } else {
+                    //hover同縣市的鄉鎮
+                    if (intersectedObject.parent === selectedCity) {
+                        resetHoverEffect();
+                        handleHoverArea(intersectedObject)
+                    } else {
+                        resetHoverEffect();
+                        handleHoverCity(intersectedObject);
+                    }
                 }
-            });
-
-
-            if (!isCountySelected) {
-                //show整個城市顏色
-                showCityColor()
 
             } else {
-                // 已經onclick了某個城市
-
-                //如果有onclick某個鄉鎮, 就只能hover案場
-                if (selectedArea) {
-                    if (intersectedObject.geometry instanceof THREE.ShapeGeometry) {
-                        // Perform the hover action
-                        console.log(intersectedObject.userData.siteName);
-                    }
-                    return;
-                }
-
-                if (hoverIntersectedGroup === selectedCity) {
-                    // hover到已經click的城市上, 秀出當前hover的鄉鎮名稱
-
-                    // 把上一個intersected object的顏色改回原本的顏色
-                    if (INTERSECTED) INTERSECTED.material.color.setHex(INTERSECTED.currentHex);
-
-                    // Store the new intersected object 
-                    INTERSECTED = intersects[0].object;
-
-                    // Store the original color of the intersected object
-                    INTERSECTED.currentHex = INTERSECTED.material.color.getHex();
-
-                    // Change the color of the intersected object to red
-                    INTERSECTED.material.color.setHex(0xff0000);
-
-                    // Show the tooltip and set its content to the city name
-                    tooltip.style.display = 'block';
-                    tooltip.textContent = INTERSECTED.userData.areaName;
-                    //convert from normalized device coordinates to pixel coordinates
-                    tooltip.style.left = `${(mouse.x * 0.5 + 0.5) * window.innerWidth}px`;
-                    tooltip.style.top = `${-(mouse.y * 0.5 - 0.5) * window.innerHeight}px`;
-
-                    // 更新視角
-                    // control.update()
-
-                } else {
-                    // 如果hover到不是click的城市上
-                    // show整個城市的顏色
-                    showCityColor()
-                    tooltip.style.display = 'none';
-                }
+                //沒選擇城市
+                resetHoverEffect();
+                handleHoverCity(intersectedObject);
             }
-
         } else {
-            //滑鼠移到空白處
-            if (selectedArea) {
-                return;
-            }
-            if (isCountySelected) {
-                // 選擇了縣市, 但是滑鼠移開了
-                if (INTERSECTED) INTERSECTED.material.color.setHex(INTERSECTED.currentHex);
-                tooltip.style.display = 'none';
-                INTERSECTED = null;
-            }
+            //滑鼠在空白處
+            resetHoverEffect();
         }
+
+
+
+        // if (!selectedArea) {
+        //     resetHoverEffect(intersectedObject);
+        // }
+
+        // updateHoverUnit(intersectedObject);
+
+        // // hover到案場
+        // if (intersectedObject.geometry instanceof THREE.ShapeGeometry) {
+        //     handleHoverSite(intersectedObject);
+        // }
+
+        // // 有選擇的鄉鎮, hover到那個鄉鎮
+        // else if (selectedArea === intersectedObject) {
+        //     return;
+        // }
+
+        // // 有選擇的縣市, hover到那個縣市
+        // else if (isCountySelected && hoverIntersectedGroup === selectedCity) {
+        //     handleHoverArea(intersectedObject);
+        // }
+
+        // // 有選擇的縣市, hover到另一個縣市
+        // else {
+        //     handleHoverCity();
+        //     tooltip.style.display = 'none';
+        // }
+
     }
 
 
@@ -263,36 +266,36 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
         const intersects = raycaster.intersectObjects(allChildren, true);
 
         if (intersects.length > 0) {
-            if (selectedArea) return;
-            resetCity(selectedCity);
-
-            //如果還沒選擇縣市, 或是已經選縣市了但是hover到不同的縣市, show縣市的顏色
+            //如果還沒選擇縣市, 或是已經選縣市了但是又選不同的縣市, show縣市的顏色
             if (!isCountySelected || hoverIntersectedGroup !== selectedCity) {
-                handleShowCity();
+                resetCityEffect();
+                handleClickCity();
             } else {
-                //已經選擇縣市, 且hover到同一個縣市, show鄉鎮的顏色
-                let intersectedObject = intersects[0].object;
-                handleShowArea(intersectedObject);
+                //已經選擇縣市, 且選擇到同一個縣市內的鄉鎮, show鄉鎮的顏色
+                let intersectedArea = intersects[0].object;
+                handleClickArea(intersectedArea);
             }
         } else {
             //沒有選到任何縣市
-            resetCity(selectedCity)
+            resetCityEffect();
             isCountySelected = false;
             selectedCity = null;
             selectedCityColor = null;
             selectedArea = null;
             tooltip.style.display = 'none';
-            // resetCameraView();
+            resetCameraView();
         }
     }
 
-
-    createTraingle(latLngToCustom(25.025343, 121.56855), '吳興國小')
-    createTraingle(latLngToCustom(25.047153, 121.569694), '興雅國小')
-    createTraingle(latLngToCustom(25.038480, 121.586201), '福德國小')
+    //把案場加上地圖
+    schoolData.forEach(school => {
+        const { lat, lng, name } = school;
+        createTraingle(latLngToCustom(lat, lng), name);
+    });
 
 
     function animate() {
+        stats.begin()
         requestAnimationFrame(animate);
 
         hover();
@@ -300,20 +303,29 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
         // console.log(`Camera position: x = ${camera.position.x.toFixed(2)}, y = ${camera.position.y.toFixed(2)}, z = ${camera.position.z.toFixed(2)}`);
 
         if (progress < 1 && targetPosition && startPosition) {
-            progress += 0.03; // speed of the animation
+            progress += 0.04; // speed of the animation, 
+            // 這裡不要設成不能整除1的數字
+            // 不然會有一點點的誤差, 造成最後的位置不是targetPosition
+            // JS的浮點數運算有時候會有誤差
+
             camera.position.lerpVectors(startPosition, targetPosition, progress);
         }
 
+
         if (progressRotation < 1 && targetRotation && startRotation) {
-            progressRotation += 0.03; // speed of the rotation animation
+            progressRotation += 0.04; // speed of the rotation animation
+            // 這裡不要設成不能整除1的數字
+            // 不然會有一點點的誤差, 造成最後的位置不是targetPosition
+            // JS的浮點數運算有時候會有誤差
+
             camera.rotation.x = startRotation.x + (targetRotation.x - startRotation.x) * progressRotation;
         }
 
+
         // control.update();
 
-
-
         renderer.render(scene, camera);
+        stats.end()
     }
 
     animate();
@@ -321,8 +333,9 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
 })
 
 
+
 //////////////////////////////////////Helper/////////////////////////////////////////
-function handleShowCity() {
+function handleClickCity() {
     hoverIntersectedGroup.traverse((area) => {
         if (area instanceof THREE.Mesh) {
             // Set the color of the area
@@ -330,13 +343,13 @@ function handleShowCity() {
             area.material.color.setHex(color);
 
             // Create edges for the mesh
-            const edgesGeometry = new THREE.EdgesGeometry(area.geometry);
-            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+            // const edgesGeometry = new THREE.EdgesGeometry(area.geometry);
+            // const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
 
-            const lineSegments = new THREE.LineSegments(edgesGeometry, lineMaterial);
-            lineSegments.raycast = function () { };
-            // Keep a reference to the LineSegments
-            area.userData.edges = lineSegments;
+            // const lineSegments = new THREE.LineSegments(edgesGeometry, lineMaterial);
+            // lineSegments.raycast = function () { };
+            // // Keep a reference to the LineSegments
+            // area.userData.edges = lineSegments;
 
             //讓選擇的城市看起來更立體
             let shape = area.geometry.parameters.shapes;
@@ -353,18 +366,25 @@ function handleShowCity() {
         }
     });
 
+    selectedArea = null;
     selectedCity = hoverIntersectedGroup;
     selectedCityColor = hoverIntersectedGroupColor;
     isCountySelected = true;
     setCameraViewTo(selectedCity);
 }
 
-function handleShowArea(intersectedObject) {
-    //已經選擇縣市, 且hover到同一個縣市, show鄉鎮的顏色
-    selectedCity.traverse(area => {
-        if (area !== intersectedObject) {
-            removeEdgesFromArea(area);
-        } else {
+function handleClickArea(intersectedArea) {
+    selectedArea = null;
+
+    //已經選擇縣市, 且選同個縣市內的鄉鎮, show鄉鎮的顏色
+    selectedCity.traverse((area) => {
+
+        //three group的第一個元素是他自己, 所以要過濾掉
+        if (area instanceof THREE.Group) {
+            return;
+        }
+
+        if (area.userData.areaName === intersectedArea.userData.areaName) {
             selectedArea = area;
             showArea(area);
         }
@@ -382,12 +402,63 @@ function resetCameraView() {
     startRotation = camera.rotation.clone();
 }
 
-function showCityColor() {
+function handleHoverCity(intersectedObject) {
+    updateHoverUnit(intersectedObject);
     hoverIntersectedGroup.traverse((child) => {
         if (child instanceof THREE.Mesh) {
             child.material.color.setHex(0xff0000);
         }
     });
+}
+
+function resetHoverEffect(selectedArea) {
+
+    //整個city的鄉鎮改回原本的顏色
+    if (hoverIntersectedGroup) {
+        hoverIntersectedGroup.traverse((area) => {
+            if (area instanceof THREE.Mesh && area !== selectedArea) {
+                area.material.color.setHex(hoverIntersectedGroupColor);
+            }
+        });
+
+        hoverIntersectedGroup = null;
+    }
+
+    //某個鄉鎮改回原本的顏色    
+    if (hoveredArea) {
+        hoveredArea.material.color.setHex(hoveredArea.currentHex);
+        hoveredArea = null;
+    }
+}
+
+
+function handleHoverSite(intersectedObject) {
+    let orgColor = intersectedObject.material.color;
+    intersectedObject.userData.color = orgColor;
+    intersectedObject.material.color.setHex(0xff0000);
+    console.log('perform hover action');
+}
+
+
+
+
+function updateHoverUnit(intersectedObject) {
+    if (intersectedObject) {
+        //更新hoverIntersectedGroup, hoveredArea
+        allChildren.forEach(area => {
+            if (area === intersectedObject) {
+
+                hoverIntersectedGroup = area.parent;
+                hoveredArea = intersectedObject;
+
+                //紀錄當前hoverIntersectedGroup的顏色, 用在滑鼠移開時改回原本的顏色
+                hoverIntersectedGroupColor = hoverIntersectedGroup.children[0].material.color.getHex();
+
+                // 儲存原本的鄉鎮顏色, 用在之後改變回去 
+                hoveredArea.currentHex = hoveredArea.material.color.getHex();
+            }
+        });
+    }
 }
 
 function removeEdgesFromArea(area) {
@@ -396,7 +467,7 @@ function removeEdgesFromArea(area) {
 
 function showArea(area) {
     area.material.color.setHex(0xffff00);
-    area.userData.edges.material.color.setHex(0x000000);
+    area.currentHex = 0xffff00;
 
     //讓選擇的城市看起來更立體
     let shape = area.geometry.parameters.shapes;
@@ -410,24 +481,46 @@ function showArea(area) {
     // Replace the old geometry
     area.geometry.dispose(); // Dispose of the old geometry
     area.geometry = newGeometry; // Assign the new geometry
-
     setCameraViewTo(area);
 }
 
-function resetCity(city) {
-    if (city) {
+function handleHoverArea(intersectedObject) {
+
+    updateHoverUnit(intersectedObject);
+
+    // 更新鄉鎮的顏色成紅色
+    hoveredArea.material.color.setHex(0xff0000);
+
+    // Show the tooltip
+    tooltip.style.display = 'block';
+    tooltip.textContent = hoveredArea.userData.areaName;
+    //convert from normalized device coordinates to pixel coordinates
+    tooltip.style.left = `${(mouse.x * 0.5 + 0.5) * window.innerWidth}px`;
+    tooltip.style.top = `${-(mouse.y * 0.5 - 0.5) * window.innerHeight}px`;
+
+    // 更新視角
+    // control.update()
+}
+
+function resetCityEffect() {
+    if (selectedCity) {
         //把上一個selectedCity裡面所有的物件顏色改回原本的顏色
-        city.traverse((area) => {
+        selectedCity.traverse((area) => {
             if (area instanceof THREE.Mesh) {
                 // Reset the color
                 area.material.color.setHex(selectedCityColor);
+
                 //remove the edges 
                 area.remove(area.userData.edges);
 
-                //把城市的立體感拿掉
+                //城市的立體感拿掉
                 let shape = area.geometry.parameters.shapes;
-                let extrudeSettings = {};
+                let extrudeSettings = {
+                    // depth: 0, // updated depth of the extrusion
+                    // ...area.geometry.parameters.options
+                };
                 let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
                 // Replace the old geometry
                 area.geometry.dispose(); // Dispose of the old geometry
                 area.geometry = newGeometry; // Assign the new 
@@ -436,6 +529,8 @@ function resetCity(city) {
         );
     }
 }
+
+
 
 function setCameraViewTo(target) {
     //計算城市的中心點, 並把camera移動到中心點
@@ -446,24 +541,28 @@ function setCameraViewTo(target) {
     let size = new THREE.Vector3();
     box.getSize(size);
 
-    let tiltAngle = Math.PI / 60; // 30 degrees tilt
+    let tiltAngle = Math.PI / 90; // 30 degrees tilt
 
     // Calculate the diagonal of the bounding box
     let diagonal = new THREE.Vector3().subVectors(box.max, box.min).length();
-
-    let distance = diagonal / (2 * Math.tan((camera.fov / 2) * (Math.PI / 180))) * (1 / 0.8);
+    let distance = diagonal / (2 * Math.tan((camera.fov / 2) * (Math.PI / 180))) * (1 / 0.85);
 
     // Adjust the camera position to account for the tilt
-    let zAdjustment = distance * Math.cos(tiltAngle);
+    let minZAdjustment = 38;
+    let zAdjustment = Math.max(distance * Math.cos(tiltAngle), minZAdjustment);
     let yAdjustment = distance * Math.sin(tiltAngle);
 
     // Get the center point
     let center = new THREE.Vector3();
     box.getCenter(center);
 
+    // box helper 
+    let helper = new THREE.Box3Helper(box, 0xffff00);
+    scene.add(helper);
+
     // tansition for the camera animation
     progress = 0;
-    targetPosition = new THREE.Vector3(center.x, center.y - yAdjustment, center.z + zAdjustment);
+    targetPosition = new THREE.Vector3(center.x, center.y + yAdjustment, center.z + zAdjustment);
     startPosition = camera.position.clone();
 
     // rotation for the camera animation
@@ -557,7 +656,7 @@ function addHelperAxis(svgCenter) {
 
 
 
-// Convert a latitude/longitude point to your custom coordinate system
+// Convert a latitude/longitude point to custom coordinate system
 function latLngToCustom(newLat, newLon) {
     //svg的中心點
     let lat1 = 24.005198;
@@ -576,14 +675,18 @@ function latLngToCustom(newLat, newLon) {
     let yScale = (y2 - y1) / (lat2 - lat1);
 
     // Calculate the offsets
-    let xOffset = x1 - lon1 * xScale;
-    let yOffset = y1 - lat1 * yScale;
+    let xOffset = x1 - lon1 * xScale - 1;
+    //this -1 magic value is obtained from the real svg display and manual adjustment
+
+    let yOffset = y1 - lat1 * yScale + 2.5;
+    //this 2.5 magic value is from obtained the real svg display and manual adjustment
 
     // Convert the new latitude/longitude to the custom coordinate system
     let newX = newLon * xScale + xOffset;
     let newY = newLat * yScale + yOffset;
 
-    return new THREE.Vector3(newX - 1, newY, 10);
+
+    return new THREE.Vector3(newX, newY, 10);
 }
 
 function createTraingle(vector3, siteName) {
@@ -594,8 +697,8 @@ function createTraingle(vector3, siteName) {
     shape.moveTo(0, 0);
 
     // Draw lines to the other two points
-    shape.lineTo(1.5, 0);
-    shape.lineTo(0, 1.5);
+    shape.lineTo(1.2, 0);
+    shape.lineTo(0, 1.2);
 
     // Close the shape
     shape.closePath();
@@ -625,3 +728,5 @@ function createTraingle(vector3, siteName) {
     scene.add(triangle);
 
 }
+
+

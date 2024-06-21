@@ -10,11 +10,13 @@
   "license": "ISC",
   "dependencies": {
     "jsdom": "^24.1.0",
+    "stats.js": "^0.17.0",
     "three": "^0.165.0"
   },
   "type": "module",
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
+    "@types/stats.js": "^0.17.3",
     "vite": "^5.2.13"
   }
 }

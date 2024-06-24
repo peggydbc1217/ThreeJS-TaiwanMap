@@ -1,0 +1,11 @@
+#zoom-controls {
+    position: fixed;
+    top: 0%;
+    right: 50%;
+    pointer-events: none;
+}
+
+#zoom-slider {
+    width: 200px;
+    pointer-events: auto;
+}

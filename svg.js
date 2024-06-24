@@ -33,10 +33,10 @@ const tooltip = document.getElementById('tooltip');
 let hoverIntersectedGroup;
 let hoverIntersectedGroupColor;
 let selectedCity;
-let selectedCityColor;
+let selectedCityOrgColor;
 let hoveredArea;
 let selectedArea;
-let selectedAreaColor = '0xffff00';
+let orgAreaColor = '0xffff00';
 
 //tool
 let mouse = new THREE.Vector2();
@@ -262,7 +262,7 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
             resetCityEffect();
             isCountySelected = false;
             selectedCity = null;
-            selectedCityColor = null;
+            selectedCityOrgColor = null;
             selectedArea = null;
             tooltip.style.display = 'none';
             resetCameraView();
@@ -320,20 +320,20 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
 function handleClickCity(intersectedObject) {
 
     selectedCity = null;
-    selectedCityColor = null;
+    selectedCityOrgColor = null;
     selectedArea = null;
 
     allChildren.forEach(area => {
         if (area === intersectedObject) {
             selectedCity = area.parent;
-            selectedCityColor = area.currentHex;
+            selectedCityOrgColor = area.currentHex ? area.currentHex : 0xffffff;
         }
     });
 
     selectedCity.traverse((area) => {
         if (area instanceof THREE.Mesh) {
-            // Set the color of the area
-            area.currentHex = area.material.color.getHex();
+
+            area.material.color.setHex(0x00ff00);
 
             // Create edges for the mesh
             // const edgesGeometry = new THREE.EdgesGeometry(area.geometry);
@@ -365,12 +365,6 @@ function handleClickCity(intersectedObject) {
 
 function handleClickArea(intersectedObj) {
 
-    //reset上個選擇的鄉鎮的顏色
-    if (selectedArea) {
-        // console.log('last selected area = ', selectedArea.userData.areaName);
-        selectedArea.material.color.setHex(selectedAreaColor);
-    }
-
     //已經選擇城市, 且選同個城市內的鄉鎮, show鄉鎮的顏色
     selectedCity.traverse((area) => {
         //three group的第一個元素是他自己, 所以要過濾掉
@@ -379,10 +373,38 @@ function handleClickArea(intersectedObj) {
         }
 
         if (area.userData.areaName === intersectedObj.userData.areaName) {
-            showArea(area);
+
+            //reset上個選擇的鄉鎮的顏色
+            if (selectedArea && orgAreaColor) {
+                ;
+                selectedArea.material.color.setHex(orgAreaColor);
+                selectedArea.currentHex = null;
+            }
+
+            selectedArea = area;
+            area.currentHex = area.material.color.getHex();
+            area.material.color.setHex(0x0000ff);
+            orgAreaColor = area.currentHex;
+
+            //讓選擇的城市看起來更立體
+            let shape = area.geometry.parameters.shapes;
+            let extrudeSettings = {
+                depth: -10, // updated depth of the extrusion
+                bevelEnabled: true,
+                bevelThickness: 0.5,
+                ...area.geometry.parameters.options
+            };
+
+            let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            // Replace the old geometry
+            area.geometry.dispose(); // Dispose of the old geometry
+            area.geometry = newGeometry; // Assign the new geometry
+            setCameraViewTo(area);
         }
     });
 }
+
+
 
 let rectangles = [];
 
@@ -408,7 +430,7 @@ function handleClickSite(intersectedObj) {
         let geometry = new THREE.PlaneGeometry(width, height);
         let rectangle = new THREE.Mesh(geometry, material);
         rectangle.position.copy(intersectedObj.position);
-        
+
 
         switch (i) {
             case 0: // Top
@@ -420,12 +442,12 @@ function handleClickSite(intersectedObj) {
                 break;
             case 2: // Left
                 rectangle.rotateZ(Math.PI / 2);
-                rectangle.position.y += sizeOfintersectedObj/2;
+                rectangle.position.y += sizeOfintersectedObj / 2;
                 rectangle.position.x -= offset;
                 break;
             case 3: // Right
                 rectangle.rotateZ(Math.PI / 2);
-                rectangle.position.y += sizeOfintersectedObj/2;
+                rectangle.position.y += sizeOfintersectedObj / 2;
                 rectangle.position.x += offset;
                 break;
         }
@@ -436,31 +458,10 @@ function handleClickSite(intersectedObj) {
     }
 
     setCameraViewTo(intersectedObj);
-    
+
 }
 
-function showArea(area) {
-    // console.log('selected area =', area.userData.areaName);
 
-    selectedArea = area;
-    selectedAreaColor = area.currentHex;
-    area.material.color.setHex(0x0000ff);
-
-    //讓選擇的城市看起來更立體
-    let shape = area.geometry.parameters.shapes;
-    let extrudeSettings = {
-        depth: -10, // updated depth of the extrusion
-        bevelEnabled: true,
-        bevelThickness: 0.5,
-        ...area.geometry.parameters.options
-    };
-
-    let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    // Replace the old geometry
-    area.geometry.dispose(); // Dispose of the old geometry
-    area.geometry = newGeometry; // Assign the new geometry
-    setCameraViewTo(area);
-}
 
 
 function resetCityEffect() {
@@ -470,7 +471,7 @@ function resetCityEffect() {
         selectedCity.traverse((area) => {
             if (area instanceof THREE.Mesh) {
                 // Reset the color
-                area.material.color.setHex(area.currentHex);
+                area.material.color.setHex(selectedCityOrgColor);
 
                 // remove the edges 
                 // area.remove(area.userData.edges);
@@ -478,7 +479,7 @@ function resetCityEffect() {
                 //城市的立體感拿掉
                 let shape = area.geometry.parameters.shapes;
                 let extrudeSettings = {
-                    // depth: 0, // updated depth of the extrusion
+                    // depth: 0, //  updated depth of the extrusion
                     // ...area.geometry.parameters.options
                 };
                 let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
@@ -491,8 +492,10 @@ function resetCityEffect() {
         );
     }
 
-    if (selectedArea) {
-        selectedArea.material.color.setHex(selectedAreaColor);
+    // 選擇了城市+鄉鎮, 接下來去選擇另一個城市, 把原來的鄉鎮特效返回白色
+    if (selectedArea && orgAreaColor) {
+        selectedArea.material.color.setHex(0xffffff);
+        selectedArea.currentHex = null;
     }
 }
 
@@ -505,6 +508,9 @@ function resetCameraView() {
     progressRotation = 0;
     targetRotation = new THREE.Euler(0, 0, 0, 'XYZ');
     startRotation = camera.rotation.clone();
+
+    const zoomBar = document.getElementById('zoom-slider');
+    zoomBar.value = 0;
 }
 
 function handleHoverCity(intersectedObject) {
@@ -632,6 +638,11 @@ function setCameraViewTo(target) {
     progressRotation = 0;
     targetRotation = new THREE.Euler(tiltAngle, 0, 0, 'XYZ'); // 30 degrees tilt
     startRotation = camera.rotation.clone();
+
+    //sync bar
+    document.getElementById('zoom-slider').value = (1500 - (center.z + zAdjustment))/15;
+    
+    console.log((1500 - (center.z + zAdjustment))/15);
 }
 
 
@@ -792,4 +803,23 @@ function createTraingle(vector3, siteName) {
 
 }
 
+
+
+//調整bar 所對應的camera z position
+document.getElementById('zoom-slider').addEventListener('input', function() {
+    if(Number(this.value) === 100 ){
+        camera.position.z = 10;
+        return;
+    }
+
+    // 1 -> 10
+    // 100 -> 1500
+    // 50 -> 750
+    // 10 -> 140
+
+    let newZ = ( 100 - this.value) * 15;
+
+    // Set the new z position
+    camera.position.z = newZ;
+});
 

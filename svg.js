@@ -141,9 +141,6 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
     })();
 
 
-
-
-
     // Step 1: Create a Raycaster and a Vector2
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -318,6 +315,12 @@ loader.load('https://storage.googleapis.com/umas_public_assets/michaelBay/day13/
 
 //////////////////////////////////////Helper/////////////////////////////////////////
 function handleClickCity(intersectedObject) {
+        // Remove previous rectangles
+        for (let i = 0; i < rectangles.length; i++) {
+            scene.remove(rectangles[i]);
+        }
+        // Clear the array
+        rectangles = [];
 
     selectedCity = null;
     selectedCityOrgColor = null;
@@ -334,28 +337,8 @@ function handleClickCity(intersectedObject) {
         if (area instanceof THREE.Mesh) {
 
             area.material.color.setHex(0x00ff00);
-
-            // Create edges for the mesh
-            // const edgesGeometry = new THREE.EdgesGeometry(area.geometry);
-            // const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-
-            // const lineSegments = new THREE.LineSegments(edgesGeometry, lineMaterial);
-            // lineSegments.raycast = function () { };
-            // // Keep a reference to the LineSegments
-            // area.userData.edges = lineSegments;
-
             //讓選擇的城市看起來更立體
-            let shape = area.geometry.parameters.shapes;
-            let extrudeSettings = {
-                depth: -10, // updated depth of the extrusion
-                bevelEnabled: true,
-                bevelThickness: 0.5,
-                ...area.geometry.parameters.options
-            };
-            let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-            // Replace the old geometry
-            area.geometry.dispose(); // Dispose of the old geometry
-            area.geometry = newGeometry; // Assign the new geometry
+            showExtrudeEffect(area);
         }
     });
 
@@ -376,29 +359,19 @@ function handleClickArea(intersectedObj) {
 
             //reset上個選擇的鄉鎮的顏色
             if (selectedArea && orgAreaColor) {
-                ;
                 selectedArea.material.color.setHex(orgAreaColor);
                 selectedArea.currentHex = null;
             }
 
+            //更新鄉鎮顏色
             selectedArea = area;
             area.currentHex = area.material.color.getHex();
             area.material.color.setHex(0x0000ff);
             orgAreaColor = area.currentHex;
 
             //讓選擇的城市看起來更立體
-            let shape = area.geometry.parameters.shapes;
-            let extrudeSettings = {
-                depth: -10, // updated depth of the extrusion
-                bevelEnabled: true,
-                bevelThickness: 0.5,
-                ...area.geometry.parameters.options
-            };
+            showExtrudeEffect(area, -20);
 
-            let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-            // Replace the old geometry
-            area.geometry.dispose(); // Dispose of the old geometry
-            area.geometry = newGeometry; // Assign the new geometry
             setCameraViewTo(area);
         }
     });
@@ -477,18 +450,10 @@ function resetCityEffect() {
                 // area.remove(area.userData.edges);
 
                 //城市的立體感拿掉
-                let shape = area.geometry.parameters.shapes;
-                let extrudeSettings = {
-                    // depth: 0, //  updated depth of the extrusion
-                    // ...area.geometry.parameters.options
-                };
-                let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-
-                // Replace the old geometry
-                area.geometry.dispose(); // Dispose of the old geometry
-                area.geometry = newGeometry; // Assign the new 
+                resetExtrudeEffect(area);
             }
         }
+        
         );
     }
 
@@ -639,10 +604,8 @@ function setCameraViewTo(target) {
     targetRotation = new THREE.Euler(tiltAngle, 0, 0, 'XYZ'); // 30 degrees tilt
     startRotation = camera.rotation.clone();
 
-    //sync bar
-    document.getElementById('zoom-slider').value = (1500 - (center.z + zAdjustment))/15;
-    
-    console.log((1500 - (center.z + zAdjustment))/15);
+    //sync with zoom in bar
+    document.getElementById('zoom-slider').value = (1500 - (center.z + zAdjustment)) / 15;
 }
 
 
@@ -806,20 +769,54 @@ function createTraingle(vector3, siteName) {
 
 
 //調整bar 所對應的camera z position
-document.getElementById('zoom-slider').addEventListener('input', function() {
-    if(Number(this.value) === 100 ){
+document.getElementById('zoom-slider').addEventListener('input', function () {
+
+    if (Number(this.value) === 100) {
         camera.position.z = 10;
         return;
     }
 
-    // 1 -> 10
-    // 100 -> 1500
-    // 50 -> 750
-    // 10 -> 140
+    // 1 -> 1500
+    // 100 -> 10
+    // 1490/99 = 15.05
 
-    let newZ = ( 100 - this.value) * 15;
+
+    let newZ = (100 - this.value) * 15.05;
 
     // Set the new z position
     camera.position.z = newZ;
 });
 
+
+function showExtrudeEffect(target, depth=-10) {
+    // 讓選擇的城市看起來更立體
+    let shape = target.geometry.parameters.shapes;
+    let extrudeSettings = {
+        depth, // updated depth of the extrusion
+        bevelEnabled: true,
+        bevelThickness: 0.5,
+        ...target.geometry.parameters.options
+    };
+    let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    // Replace the old geometry
+    target.geometry.dispose(); // Dispose of the old geometry
+    target.geometry = newGeometry; // Assign the new geometry
+}
+
+function resetExtrudeEffect(target) {
+
+    // remove the edges 
+    // target.remove(target.userData.edges);
+
+    //城市的立體感拿掉
+    let shape = target.geometry.parameters.shapes;
+    let extrudeSettings = {
+        // depth: 0, //  updated depth of the extrusion
+        // ...target.geometry.parameters.options
+    };
+    let newGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+    // Replace the old geometry
+    target.geometry.dispose(); // Dispose of the old geometry
+    target.geometry = newGeometry; // Assign the new 
+}

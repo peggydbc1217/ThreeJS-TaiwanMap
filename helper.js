@@ -45,25 +45,9 @@ export async function loadSvgAndCreateMeshes(svgPath, isCountySelected, scene) {
             // Add the cityName to the userData property of the mesh
             mesh.userData.areaName = path.userData.node.id;
 
-
-            if (isCountySelected) {
-                //如果有選擇county, 把每個區都加上邊緣線
-                const edgesGeometry = new THREE.EdgesGeometry(mesh.geometry);
-                const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-                const lineSegments = new THREE.LineSegments(edgesGeometry, lineMaterial);
-
-                //防止hover時，邊緣線被選取
-                lineSegments.raycast = function () { };
-
-                mesh.add(lineSegments);
-            }
             group.add(mesh);
         })
     })
-
-    if (!isCountySelected) {
-
-    }
 
 
     // Three.js的(0,0)原點為左下，而SVG的(0,0)原點為左上，導致在SVGLoader在匯入時，會顛倒。

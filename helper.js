@@ -22,7 +22,9 @@ export async function loadSvgAndCreateMeshes(svgPath, isCountySelected, scene) {
 
     // 將Path轉成3D Mesh
     paths.forEach((path, i) => {
+        //#1f3d4c
         const color = path.color;
+
         const material = new THREE.MeshStandardMaterial({
             color,
             side: THREE.DoubleSide,
